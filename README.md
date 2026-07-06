@@ -114,15 +114,25 @@ claude-review:
 
 ## Tags
 
-Tags are derived from the git tag that triggered the build:
+There are two independent families of tags:
+
+**Image release tags** — versioned by *this repo* (the Dockerfile/config), built
+from the latest Claude Code at build time. Cut via a semver git tag:
 
 | Git tag | Docker tags |
 | --- | --- |
 | `v1.4.2` | `1.4.2`, `1.4`, `1`, `latest` |
 | `v1.5.0-rc1` | `1.5.0-rc1` (no `latest`) |
 
-Pin to a specific version for reproducible pipelines (`awkto/claude-code:1.4.2`);
-use `:latest` to always get the newest stable build.
+**Claude Code version tags** — the image tag *is* the Claude Code version it
+contains, e.g. `awkto/claude-code:2.1.201`. Reproducible and self-documenting.
+Published on demand and weekly (tracking the newest Claude Code).
+
+Which should you use?
+
+- `:latest` — newest stable image, always current Claude Code. Good default.
+- `:2.1.201` (a Claude Code version) — pin the exact Claude Code your pipeline runs.
+- `:1.4.2` (an image release) — pin this repo's config/base as well.
 
 ## Releasing (maintainers)
 
@@ -137,6 +147,21 @@ The [`build-and-push`](./.github/workflows/build-push.yml) workflow builds the
 multi-arch image and pushes all derived tags to Docker Hub. A monthly (or more
 frequent) refresh is just a new tag — each build pulls the latest Claude Code
 and base image.
+
+### Publishing Claude-Code-version-pinned images
+
+The [`publish-claude-version`](./.github/workflows/publish-claude-version.yml)
+workflow builds an image pinned to a specific Claude Code version and tags it
+with that version (e.g. `awkto/claude-code:2.1.201`). It does **not** touch
+`latest`. It runs:
+
+- **Weekly** (Mondays 06:00 UTC), tracking the newest Claude Code release.
+- **On demand:** Actions → *publish-claude-version* → *Run workflow*, optionally
+  entering an exact version. Or via CLI:
+
+  ```bash
+  gh workflow run publish-claude-version -f version=2.1.201
+  ```
 
 ### Required repository secrets
 

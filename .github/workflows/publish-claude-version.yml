@@ -1,0 +1,71 @@
+name: publish-claude-version
+
+# Build an image pinned to a specific Claude Code version and tag the image
+# with that exact version (e.g. awkto/claude-code:2.1.201). This makes the
+# image tag self-documenting and reproducible.
+#
+# Runs:
+#   - manually (workflow_dispatch), optionally for a specific version
+#   - weekly, tracking whatever Claude Code version is newest
+#
+# This does NOT touch the `latest` tag — that stays owned by the semver-tag
+# release flow in build-push.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Claude Code version or npm dist-tag to build (e.g. 2.1.201 or latest)"
+        required: false
+        default: "latest"
+  schedule:
+    # Weekly, Mondays 06:00 UTC. Picks up the newest Claude Code (and a fresh
+    # base image for that version's tag).
+    - cron: "0 6 * * 1"
+
+env:
+  IMAGE_NAME: awkto/claude-code
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Claude Code version
+        id: cc
+        run: |
+          REQ="${{ github.event.inputs.version || 'latest' }}"
+          RESOLVED="$(npm view "@anthropic-ai/claude-code@${REQ}" version | tail -1)"
+          if [ -z "$RESOLVED" ]; then
+            echo "::error::could not resolve @anthropic-ai/claude-code@${REQ}"
+            exit 1
+          fi
+          echo "version=$RESOLVED" >> "$GITHUB_OUTPUT"
+          echo "Resolved '$REQ' -> $RESOLVED"
+
+      - name: Set up QEMU (for multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push (pinned to Claude Code version)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            CLAUDE_CODE_VERSION=${{ steps.cc.outputs.version }}
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.cc.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.cc.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
