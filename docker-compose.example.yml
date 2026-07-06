@@ -1,0 +1,25 @@
+# Example compose file for running Claude Code non-interactively.
+#
+#   ANTHROPIC_API_KEY=sk-ant-... docker compose -f docker-compose.example.yml run --rm claude
+#
+services:
+  claude:
+    image: awkto/claude-code:latest
+    working_dir: /workspace
+    environment:
+      # Pass the key through from the host/CI environment (do not hardcode).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      # Your project / repo checkout.
+      - ./:/workspace
+      # Optional: bring your global Claude config, skills and memory into the run.
+      # Files must be readable by uid 1000 (the container's `node` user).
+      - ${HOME}/.claude/skills:/home/node/.claude/skills:ro
+      - ${HOME}/.claude/settings.json:/home/node/.claude/settings.json:ro
+      - ${HOME}/.claude/CLAUDE.md:/home/node/.claude/CLAUDE.md:ro
+      # Persist project memory/history across runs (read-write):
+      # - ${HOME}/.claude/projects:/home/node/.claude/projects
+    # One-shot headless invocation. Override `command` per job as needed.
+    command: >
+      claude -p "Describe what this repository does"
+      --dangerously-skip-permissions
